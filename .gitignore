@@ -1,0 +1,6 @@
+cinnamon-screensaver/
+slick-greeter/
+builddir/
+*.swp
+*~
+.DS_Store

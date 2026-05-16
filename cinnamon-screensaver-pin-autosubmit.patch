@@ -1,0 +1,41 @@
+diff --git a/src/unlock.py b/src/unlock.py
+index fd8c0dc..ee101a7 100644
+--- a/src/unlock.py
++++ b/src/unlock.py
+@@ -287,6 +287,36 @@ class UnlockDialog(BaseWindow):
+         if not self.password_entry.has_focus():
+             self.password_entry.grab_focus()
+ 
++        # PIN auto-submit: if the user has configured a fixed PIN length, try
++        # authenticating as soon as the entry contains exactly that many chars.
++        # Skipped while an auth attempt is already in flight (entry_box is
++        # insensitive during that window, but the `changed` signal still fires
++        # when set_busy() clears the entry).
++        pin_length = self._get_pin_length()
++        if pin_length and self.entry_box.get_sensitive():
++            if self.password_entry.get_text_length() == pin_length:
++                self.on_unlock_clicked()
++
++    def _get_pin_length(self):
++        """
++        Reads the PIN length from /etc/pin-unlock/length on first use and
++        caches it. The file should contain a single positive integer. Anything
++        else (missing file, blank, non-numeric, <=0) disables auto-submit.
++        Same path is used by the slick-greeter patch so login and lock share
++        one PIN-length config.
++        """
++        if hasattr(self, "_pin_length_cached"):
++            return self._pin_length_cached
++        self._pin_length_cached = 0
++        try:
++            with open("/etc/pin-unlock/length", "r") as f:
++                value = int(f.read().strip())
++            if value > 0:
++                self._pin_length_cached = value
++        except (OSError, ValueError):
++            pass
++        return self._pin_length_cached
++
+     def on_password_entry_button_press(self, widget, event):
+         """
+         Prevents the usual copy/paste popup when right-clicking the PasswordEntry.

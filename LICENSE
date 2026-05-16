@@ -1,0 +1,7 @@
+This project consists of patches against GPL-3.0-or-later licensed code
+(linuxmint/cinnamon-screensaver and linuxmint/slick-greeter) and is itself
+licensed under the GNU General Public License, version 3 or later.
+
+Full license text: https://www.gnu.org/licenses/gpl-3.0.txt
+
+SPDX-License-Identifier: GPL-3.0-or-later

@@ -1,0 +1,49 @@
+diff --git a/src/dash-entry.vala b/src/dash-entry.vala
+index d92dff0..83fb074 100644
+--- a/src/dash-entry.vala
++++ b/src/dash-entry.vala
+@@ -51,12 +51,44 @@ public class DashEntry : Gtk.Entry, Fadable
+     private Gdk.Window arrow_win;
+     private static Gdk.Pixbuf arrow_pixbuf;
+ 
++    private static int cached_pin_length = -1;
++
++    private static int get_pin_length ()
++    {
++        if (cached_pin_length >= 0)
++            return cached_pin_length;
++        cached_pin_length = 0;
++        try
++        {
++            string contents;
++            FileUtils.get_contents ("/etc/pin-unlock/length", out contents);
++            int parsed = int.parse (contents.strip ());
++            if (parsed > 0)
++                cached_pin_length = parsed;
++        }
++        catch (FileError e)
++        {
++            // No PIN length configured -- auto-submit stays disabled.
++        }
++        return cached_pin_length;
++    }
++
++    private void check_pin_autosubmit ()
++    {
++        if (!can_respond || did_respond)
++            return;
++        int pin_len = get_pin_length ();
++        if (pin_len > 0 && get_text_length () == pin_len)
++            activate ();
++    }
++
+     construct
+     {
+         fade_tracker = new FadeTracker (this);
+ 
+         notify["can-respond"].connect (queue_draw);
+         button_press_event.connect (button_press_event_cb);
++        changed.connect (check_pin_autosubmit);
+ 
+         if (arrow_pixbuf == null)
+         {
