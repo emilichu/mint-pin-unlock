@@ -34,11 +34,23 @@ re-lock (screensaver) or a logout (greeter) to take effect.
 ```bash
 sudo mkdir -p /etc/pin-unlock
 echo 6 | sudo tee /etc/pin-unlock/length     # e.g. 6-digit PIN
-sudo passwd                                  # set your password to a 6-digit number
+passwd                                       # set your password to a 6-digit number
 ```
 
 The file must be world-readable (the default for files in `/etc`). The
 greeter runs as user `lightdm` and needs to read it.
+
+### Quick install (steps 2–6 in one script)
+
+After completing step 1 above, from the cloned repo:
+
+```bash
+chmod +x install.sh
+./install.sh
+```
+
+The script is idempotent — re-running it will reuse existing clones and skip
+patches that are already applied. The manual steps below are kept for reference.
 
 ### 2. Install build dependencies
 
