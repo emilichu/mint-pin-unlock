@@ -14,8 +14,9 @@ or invalid, both programs behave exactly as upstream — auto-submit stays
 off.
 
 The PIN *is* your account password. No PAM module, no extra credential
-store. Set your password to a numeric value of the desired length with
-`passwd` and that becomes your "PIN".
+store. If your current password already has a known fixed length, you can
+use it as-is; otherwise change it to a value of the desired length with
+`passwd`.
 
 The length is read once and cached, so editing the file requires a
 re-lock (screensaver) or a logout (greeter) to take effect.
@@ -25,32 +26,69 @@ re-lock (screensaver) or a logout (greeter) to take effect.
 - Linux Mint Cinnamon edition (tested target — should work on any distro
   shipping these two packages).
 - Build toolchain: `meson`, `ninja`, `valac`, plus per-package `-dev`
-  headers. The commands below install them all via `apt build-dep`.
+  headers. The installer pulls them in via `apt build-dep`.
 
 ## Install
+
+```bash
+git clone https://github.com/emilichu/mint-pin-unlock.git
+cd mint-pin-unlock
+chmod +x install.sh
+./install.sh
+```
+
+The script will:
+
+1. Ask for your desired PIN length and write `/etc/pin-unlock/length`.
+2. Offer to run `passwd` if you want a fresh password — skip this if your
+   existing password is already the right length.
+3. Install build dependencies, clone + patch + build both projects, and
+   `apt-mark hold` them so updates don't overwrite the patched binaries.
+
+The script is idempotent: re-run it to change the length, reapply the
+patches, or recover from a partial install.
+
+## Test
+
+- Lock screen: `cinnamon-screensaver-command --lock`. Type your PIN — it
+  should submit on the last digit without you pressing Enter.
+- Login screen: reboot or `sudo systemctl restart lightdm` (this kicks
+  you out of your session — save first).
+
+## Disable
+
+Remove `/etc/pin-unlock/length` (or set its contents to `0`) and re-lock /
+re-log-in. Both programs fall back to standard Enter-to-submit behavior.
+
+## Security caveats
+
+- **Length oracle.** Anyone shoulder-surfing learns your PIN length by
+  watching how many keystrokes you type. Fine for a personal laptop;
+  not for shared or public machines.
+- **Short numeric passwords are weak.** Pair this with full-disk
+  encryption (LUKS). The Windows Hello model assumes the TPM + encrypted
+  disk are doing the heavy lifting; the PIN is a convenience layer over
+  that, not a replacement for strong credential storage.
+- **`apt upgrade` after `unhold` will replace your patched binaries**
+  with stock ones. Re-apply the patches.
+
+---
+
+## Manual install
+
+If you'd rather run the steps yourself — or the script failed partway and
+you want to resume — here's the full sequence.
 
 ### 1. Choose a PIN length and create the config
 
 ```bash
 sudo mkdir -p /etc/pin-unlock
 echo 6 | sudo tee /etc/pin-unlock/length     # e.g. 6-digit PIN
-passwd                                       # set your password to a 6-digit number
+passwd                                       # optional: only if your password isn't already 6 chars
 ```
 
 The file must be world-readable (the default for files in `/etc`). The
 greeter runs as user `lightdm` and needs to read it.
-
-### Quick install (steps 2–6 in one script)
-
-After completing step 1 above, from the cloned repo:
-
-```bash
-chmod +x install.sh
-./install.sh
-```
-
-The script is idempotent — re-running it will reuse existing clones and skip
-patches that are already applied. The manual steps below are kept for reference.
 
 ### 2. Install build dependencies
 
@@ -99,46 +137,16 @@ sudo apt-mark hold cinnamon-screensaver slick-greeter
 To re-enable updates later: `sudo apt-mark unhold cinnamon-screensaver slick-greeter`.
 You'll then need to re-clone upstream and re-apply the patches against the new source.
 
-## Test
-
-- Lock screen: `cinnamon-screensaver-command --lock`. Type your PIN — it
-  should submit on the last digit without you pressing Enter.
-- Login screen: reboot or `sudo systemctl restart lightdm` (this kicks
-  you out of your session — save first).
-
-## Disable
-
-Remove `/etc/pin-unlock/length` (or set its contents to `0`) and re-lock /
-re-log-in. Both programs fall back to standard Enter-to-submit behavior.
-
 ## Updating after upstream changes
 
 When you `unhold` and `apt upgrade` pulls new versions, your patches will
-be wiped (apt installs binaries, not source). To re-apply:
-
-```bash
-git clone https://github.com/linuxmint/cinnamon-screensaver.git
-cd cinnamon-screensaver
-git apply ../cinnamon-screensaver-pin-autosubmit.patch
-# ... build + install steps as above
-```
+be wiped (apt installs binaries, not source). To re-apply, either re-run
+`./install.sh` or repeat the manual steps above.
 
 If the patch fails to apply because upstream changed the function
 surroundings, `git apply` will tell you which hunks failed; the anchor
 points are `on_password_entry_text_changed` (cinnamon-screensaver) and
 the `construct` block in `dash-entry.vala` (slick-greeter).
-
-## Security caveats
-
-- **Length oracle.** Anyone shoulder-surfing learns your PIN length by
-  watching how many keystrokes you type. Fine for a personal laptop;
-  not for shared or public machines.
-- **Short numeric passwords are weak.** Pair this with full-disk
-  encryption (LUKS). The Windows Hello model assumes the TPM + encrypted
-  disk are doing the heavy lifting; the PIN is a convenience layer over
-  that, not a replacement for strong credential storage.
-- **`apt upgrade` after `unhold` will replace your patched binaries**
-  with stock ones. Re-apply the patches.
 
 ## License
 

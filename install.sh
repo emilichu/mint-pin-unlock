@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# One-click install: README steps 2 through 6.
-# Run from the root of this repo after completing step 1 (PIN length + password).
+# One-click installer for mint-pin-unlock.
+# Prompts for PIN length, optionally lets you set a new password,
+# then patches and installs cinnamon-screensaver and slick-greeter.
 
 set -euo pipefail
 
@@ -12,7 +13,28 @@ if [[ ! -f cinnamon-screensaver-pin-autosubmit.patch || ! -f slick-greeter-pin-a
     exit 1
 fi
 
-echo "==> [2/5] Installing build dependencies"
+# ---- PIN length + optional password change ----
+
+read -rp "PIN length (positive integer, e.g. 6): " LENGTH
+if ! [[ "$LENGTH" =~ ^[1-9][0-9]*$ ]]; then
+    echo "ERROR: '$LENGTH' is not a positive integer" >&2
+    exit 1
+fi
+
+echo "==> Writing /etc/pin-unlock/length"
+sudo mkdir -p /etc/pin-unlock
+echo "$LENGTH" | sudo tee /etc/pin-unlock/length >/dev/null
+sudo chmod 644 /etc/pin-unlock/length
+
+read -rp "Change your password now? Skip if your current password is already ${LENGTH} characters. [y/N]: " CHANGE_PW
+if [[ "$CHANGE_PW" =~ ^[Yy]$ ]]; then
+    echo "==> Running passwd — enter a value of exactly ${LENGTH} characters"
+    passwd
+fi
+
+# ---- Build dependencies, patch, build, install, hold ----
+
+echo "==> Installing build dependencies"
 sudo apt build-dep -y cinnamon-screensaver slick-greeter
 sudo apt install -y git meson ninja-build valac
 
@@ -34,7 +56,7 @@ build_and_install() {
         git apply "$patch"
     else
         echo "ERROR: ${patch##*/} does not apply cleanly to ${pkg}" >&2
-        echo "       Upstream may have changed; see README 'Updating after upstream changes'." >&2
+        echo "       Upstream may have changed; see README 'Manual install'." >&2
         exit 1
     fi
 
@@ -45,13 +67,13 @@ build_and_install() {
     cd "$REPO_ROOT"
 }
 
-echo "==> [3/5] Patching and building cinnamon-screensaver"
+echo "==> Patching and building cinnamon-screensaver"
 build_and_install cinnamon-screensaver
 
-echo "==> [4/5] Patching and building slick-greeter"
+echo "==> Patching and building slick-greeter"
 build_and_install slick-greeter
 
-echo "==> [5/5] Holding packages so apt won't overwrite the patched binaries"
+echo "==> Holding packages so apt won't overwrite the patched binaries"
 sudo apt-mark hold cinnamon-screensaver slick-greeter
 
 echo
