@@ -20,14 +20,6 @@ store. Set your password to a numeric value of the desired length with
 The length is read once and cached, so editing the file requires a
 re-lock (screensaver) or a logout (greeter) to take effect.
 
-## Why a length file at all?
-
-Because the system does not know your password's length. Passwords are
-stored hashed; the hash is the same fixed size regardless of input. There
-is no API to ask "how long is the current password" — that information
-was destroyed by `passwd`. The length file is the minimum state needed
-to make auto-submit work.
-
 ## Requirements
 
 - Linux Mint Cinnamon edition (tested target — should work on any distro
