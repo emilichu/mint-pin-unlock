@@ -40,6 +40,7 @@ sudo apt install -y git meson ninja-build valac
 
 build_and_install() {
     local pkg="$1"
+    shift
     local patch="$REPO_ROOT/${pkg}-pin-autosubmit.patch"
 
     if [[ -d "$pkg" ]]; then
@@ -60,7 +61,7 @@ build_and_install() {
         exit 1
     fi
 
-    meson setup builddir --prefix=/usr --buildtype=release --wipe
+    meson setup builddir --prefix=/usr --buildtype=release --wipe "$@"
     ninja -C builddir
     sudo ninja -C builddir install
 
@@ -68,7 +69,10 @@ build_and_install() {
 }
 
 echo "==> Patching and building cinnamon-screensaver"
-build_and_install cinnamon-screensaver
+# use-debian-pam picks the @include common-auth PAM file; without it,
+# meson installs the Fedora/Arch variant that includes system-auth and
+# breaks authentication on Mint/Debian/Ubuntu.
+build_and_install cinnamon-screensaver -Duse-debian-pam=true
 
 echo "==> Patching and building slick-greeter"
 build_and_install slick-greeter
