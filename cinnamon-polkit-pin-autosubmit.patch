@@ -1,0 +1,48 @@
+--- a/usr/share/cinnamon/js/ui/polkitAuthenticationAgent.js	2026-05-18 10:11:31.239325335 +0300
++++ b/usr/share/cinnamon/js/ui/polkitAuthenticationAgent.js	2026-05-18 10:12:15.378990923 +0300
+@@ -48,6 +48,29 @@
+ 
+ const MAX_MODAL_RETRIES = 2;
+ 
++let _cachedPinLength = -1;
++
++// Reads /etc/pin-unlock/length on first call and caches it. Returns the
++// positive integer length, or 0 if no PIN length is configured (or the file
++// is invalid). Same path is used by the cinnamon-screensaver and
++// slick-greeter patches so all three share one config.
++function _getPinLength() {
++    if (_cachedPinLength >= 0)
++        return _cachedPinLength;
++    _cachedPinLength = 0;
++    try {
++        let [ok, contents] = GLib.file_get_contents('/etc/pin-unlock/length');
++        if (ok) {
++            let n = parseInt(imports.byteArray.toString(contents).trim(), 10);
++            if (n > 0)
++                _cachedPinLength = n;
++        }
++    } catch (e) {
++        // No PIN configured -- auto-submit stays disabled.
++    }
++    return _cachedPinLength;
++}
++
+ var RootUser = class {
+     constructor(name) {
+         this.userName = name;
+@@ -316,7 +339,14 @@
+             GObject.BindingFlags.SYNC_CREATE);
+ 
+         this._passwordEntry.clutter_text.connect('text-changed', text => {
+-            this._okButton.reactive = text.get_text().length > 0;
++            let len = text.get_text().length;
++            this._okButton.reactive = len > 0;
++
++            // PIN auto-submit: fire the existing Enter handler the moment
++            // the entry reaches the configured length.
++            let pinLen = _getPinLength();
++            if (pinLen > 0 && this._passwordEntry.reactive && len === pinLen)
++                this._onEntryActivate();
+         });
+ 
+         this.contentLayout.add_child(bodyContent);

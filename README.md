@@ -1,16 +1,18 @@
 # mint-pin-unlock
 
 Windows-Hello-style PIN auto-submit for Linux Mint Cinnamon. Patches
-`cinnamon-screensaver` (lock screen) and `slick-greeter` (LightDM login
-screen) so that, once a fixed PIN length is configured, the unlock attempt
+`cinnamon-screensaver` (lock screen), `slick-greeter` (LightDM login
+screen), and Cinnamon's built-in polkit authentication dialog (the
+`Authentication Required` prompt that `pkexec` / Update Manager / etc.
+raise) so that, once a fixed PIN length is configured, the unlock attempt
 fires automatically the moment the entry reaches that many characters — no
 Enter key required.
 
 ## How it works
 
-Both patches read `/etc/pin-unlock/length`, a one-line file containing a
-positive integer (the length of your PIN). If the file is missing, empty,
-or invalid, both programs behave exactly as upstream — auto-submit stays
+All three patches read `/etc/pin-unlock/length`, a one-line file containing
+a positive integer (the length of your PIN). If the file is missing, empty,
+or invalid, every program behaves exactly as upstream — auto-submit stays
 off.
 
 The PIN *is* your account password. No PAM module, no extra credential
@@ -19,7 +21,8 @@ use it as-is; otherwise change it to a value of the desired length with
 `passwd`.
 
 The length is read once and cached, so editing the file requires a
-re-lock (screensaver) or a logout (greeter) to take effect.
+re-lock (screensaver), a logout (greeter), or a Cinnamon restart (polkit
+dialog) to take effect.
 
 ## Requirements
 
@@ -42,11 +45,14 @@ The script will:
 1. Ask for your desired PIN length and write `/etc/pin-unlock/length`.
 2. Offer to run `passwd` if you want a fresh password — skip this if your
    existing password is already the right length.
-3. Install build dependencies, clone + patch + build both projects, and
-   `apt-mark hold` them so updates don't overwrite the patched binaries.
+3. Install build dependencies, clone + patch + build `cinnamon-screensaver`
+   and `slick-greeter`, patch Cinnamon's polkit JS in place, and
+   `apt-mark hold` all three packages so updates don't overwrite the
+   patched files.
 
 The script is idempotent: re-run it to change the length, reapply the
-patches, or recover from a partial install.
+patches, or recover from a partial install. Subsequent runs skip the
+rebuild if the patches are already in place.
 
 ## Test
 
@@ -54,11 +60,26 @@ patches, or recover from a partial install.
   should submit on the last digit without you pressing Enter.
 - Login screen: reboot or `sudo systemctl restart lightdm` (this kicks
   you out of your session — save first).
+- Polkit dialog: restart Cinnamon (Alt+F2, type `r`, Enter) to pick up the
+  JS change, then `pkexec /bin/true`.
 
-## Disable
+## Disable (soft)
 
 Remove `/etc/pin-unlock/length` (or set its contents to `0`) and re-lock /
-re-log-in. Both programs fall back to standard Enter-to-submit behavior.
+re-log-in / restart Cinnamon. All three patched components fall back to
+standard Enter-to-submit behavior; the patched binaries stay installed.
+
+## Uninstall
+
+To fully revert — drop the length file, unhold the packages, and reinstall
+the stock versions from apt:
+
+```bash
+./uninstall.sh
+```
+
+After it finishes, restart Cinnamon (Alt+F2 → `r` → Enter) to drop the
+patched polkit JS from memory.
 
 ## Security caveats
 
@@ -128,13 +149,25 @@ sudo ninja -C builddir install
 cd ..
 ```
 
-### 6. Pin the packages so apt doesn't overwrite your build
+### 6. Patch Cinnamon's polkit auth dialog
+
+Cinnamon ships its own polkit agent as JavaScript, so no rebuild is needed
+— the patch goes against the installed file directly.
 
 ```bash
-sudo apt-mark hold cinnamon-screensaver slick-greeter
+sudo patch --batch --forward -p1 -d / \
+    < cinnamon-polkit-pin-autosubmit.patch
 ```
 
-To re-enable updates later: `sudo apt-mark unhold cinnamon-screensaver slick-greeter`.
+Restart Cinnamon (Alt+F2, type `r`, Enter) to pick up the change.
+
+### 7. Pin the packages so apt doesn't overwrite your build
+
+```bash
+sudo apt-mark hold cinnamon-screensaver slick-greeter cinnamon-common
+```
+
+To re-enable updates later: `sudo apt-mark unhold cinnamon-screensaver slick-greeter cinnamon-common`.
 You'll then need to re-clone upstream and re-apply the patches against the new source.
 
 ## Updating after upstream changes
@@ -143,13 +176,15 @@ When you `unhold` and `apt upgrade` pulls new versions, your patches will
 be wiped (apt installs binaries, not source). To re-apply, either re-run
 `./install.sh` or repeat the manual steps above.
 
-If the patch fails to apply because upstream changed the function
+If a patch fails to apply because upstream changed the function
 surroundings, `git apply` will tell you which hunks failed; the anchor
-points are `on_password_entry_text_changed` (cinnamon-screensaver) and
-the `construct` block in `dash-entry.vala` (slick-greeter).
+points are `on_password_entry_text_changed` (cinnamon-screensaver), the
+`construct` block in `dash-entry.vala` (slick-greeter), and the
+`text-changed` connect on `_passwordEntry` in `polkitAuthenticationAgent.js`
+(cinnamon).
 
 ## License
 
 GPL-3.0-or-later. These patches are derivative works of GPL-3.0 code
-(`linuxmint/cinnamon-screensaver`, `linuxmint/slick-greeter`) and inherit
-that license. See `LICENSE`.
+(`linuxmint/cinnamon-screensaver`, `linuxmint/slick-greeter`,
+`linuxmint/cinnamon`) and inherit that license. See `LICENSE`.
